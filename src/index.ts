@@ -9,60 +9,57 @@ export type Book = {
     author: String
 }
 
-const books :Book[] = [
-    {
-        title: "Amber Book",
-        author: "Amber"
-    }, {
-        title: "City of Glass",
-        author: "Paul Auster"
-    }
-]
-
 async function startServer() {
     const client = new MongoClient("mongodb://admin:admin@anborong.top:27017/admin")
     await client.connect()
 
     const typeDefs  = gql`
-        type Book {
-            title: String,
-            author: String
-        }
         type User {
             _id: String,
-            name: String,
-            age: String
+            name: String
+            age: Int
         }
         type Query {
-            hello: String
-            books: [Book]
-            getUser: User
+            getUser(_id: String): User
+            getAllUser: [User]
+        }
+        input UserInput {
+            _id: String!
+            name: String
+            age: Int
         }
         type Mutation {
             addUser(name: String, age: Int): User
+            deleteUser(_id: String): Boolean
+            updateUser(user: UserInput): Boolean
         }
     `;
 
     const resolvers = {
         Query: {
-            hello: () => 'Hello World!',
-            books: () => books,
-            //@ts-ignore
-            async getUser (parent, args, context, info) {
-                console.dir(parent)
-                console.dir(args)
-                console.dir(context)
-                console.dir(info)
-                return client.db("demo").collection("users").findOne({_id: new ObjectId("6114da69828d2a7ad6954222")})
+            async getUser (_: any, args: any) {
+                return client.db("demo").collection("users").findOne({_id: new ObjectId(args._id)})
+            },
+            async getAllUser () {
+                return client.db("demo").collection("users").find().toArray()
             }
+
         },
         Mutation: {
-            //@ts-ignore
-            async addUser (parent, args, context, info) {
+            async addUser (_: any, args: any) {
                 const { name, age } = args
                 const col = client.db("demo").collection("users")
                 const data = await col.insertOne({ name, age })
                 return col.findOne({_id: data.insertedId})
+            },
+            async deleteUser(_: any, { _id }: any) {
+                const res = await client.db("demo").collection("users").deleteOne({_id: new ObjectId(_id)})
+                return res.acknowledged && res.deletedCount === 1
+            },
+            async updateUser(_: any, { user: {_id, ...user} }: any) {
+                const res = await client.db("demo").collection("users").findOneAndUpdate({ _id: new ObjectId(_id) }, { $set: user })
+                console.dir(res)
+                return res.ok
             }
         }
     };
